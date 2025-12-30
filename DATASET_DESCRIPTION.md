@@ -113,8 +113,6 @@ Model architecture and training configuration:
 ### 5. Pre-trained Models (Optional)
 
 **Single model** (`models/`):
-- `lstm_cost_forecast.pth`: Trained LSTM weights
-- `scaler.pkl`: Feature scaler for normalization
 - `model_config.json`: Architecture and training metadata
 
 ---
