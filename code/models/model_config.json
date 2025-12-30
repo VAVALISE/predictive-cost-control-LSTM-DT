@@ -1,0 +1,53 @@
+{
+  "_comment": "LSTM Cost Forecasting Model Configuration",
+  
+  "paths": {
+    "data_path": "data/synthetic_CN_projects.csv",
+    "model_save_path": "models/lstm_cost_forecast.pth",
+    "history_save_path": "models/training_history.png"
+  },
+  
+  "model_architecture": {
+    "sequence_length": 12,
+    "prediction_horizon": 12,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2
+  },
+  
+  "training": {
+    "train_ratio": 0.8,
+    "batch_size": 32,
+    "num_epochs": 100,
+    "learning_rate": 0.001
+  },
+  
+  "features": {
+    "use_log_transform": true,
+    "use_mixed_loss": true,
+    "historical_features": [
+      "progress_pct",
+      "mat_index",
+      "lab_index",
+      "cpi_index",
+      "material_cost",
+      "labour_cost",
+      "equip_cost",
+      "admin_cost",
+      "total_cost",
+      "month",
+      "normalized_time",
+      "remaining_months",
+      "is_completion_phase"
+    ],
+    "future_features": [
+      "month",
+      "normalized_time",
+      "remaining_months",
+      "is_completion_phase",
+      "cpi_index",
+      "mat_index",
+      "lab_index"
+    ]
+  }
+}

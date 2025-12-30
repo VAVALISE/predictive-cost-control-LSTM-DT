@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Quick Links</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0696D7;
+            padding-bottom: 10px;
+        }
+        .info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .model-list {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .model-item {
+            padding: 12px;
+            margin: 8px 0;
+            border-left: 4px solid #4CAF50;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .model-item:hover {
+            background-color: #e8f5e9;
+        }
+        .model-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .model-link {
+            color: #0696D7;
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .model-link:hover {
+            text-decoration: underline;
+        }
+        .stage-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .stage-foundation {
+            background-color: #8D6E63;
+            color: white;
+        }
+        .stage-superstructure {
+            background-color: #5C6BC0;
+            color: white;
+        }
+        .stage-mep {
+            background-color: #26A69A;
+            color: white;
+        }
+        .stage-construction {
+            background-color: #FF9800;
+            color: white;
+        }
+        .stage-outdoor {
+            background-color: #66BB6A;
+            color: white;
+        }
+        .stage-handover {
+            background-color: #42A5F5;
+            color: white;
+        }
+        .instructions {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+            color: #721c24;
+        }
+        button {
+            background-color: #0696D7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0587c0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏗️ Forge Viewer - Model Quick Links</h1>
+
+    <div class="info">
+        <strong>📋 Instructions:</strong>
+        <ol>
+            <li>Make sure <code>local_server.py</code> is running on <code>http://localhost:8000</code></li>
+            <li>Click on any model link below to open it directly in the viewer</li>
+            <li>Use the month selector in the viewer to apply progress coloring</li>
+        </ol>
+    </div>
+
+    <div class="instructions">
+        <strong>⚠️ Setup Required:</strong><br>
+        This page will automatically load model URNs from <code>urn_mapping.json</code>.<br>
+        Make sure the file is in the same directory as this HTML file.
+    </div>
+
+    <div id="error-message" class="error" style="display: none;"></div>
+
+    <div class="model-list" id="model-list">
+        <p>Loading models...</p>
+    </div>
+
+    <script>
+        // Load URN mapping
+        fetch('/urn_mapping.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('urn_mapping.json not found. Please copy it to the WEB Viewer directory.');
+                }
+                return response.json();
+            })
+            .then(urnMapping => {
+                displayModels(urnMapping);
+            })
+            .catch(error => {
+                console.error('Error loading URN mapping:', error);
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').innerHTML = 
+                    '<strong>Error:</strong> ' + error.message + '<br><br>' +
+                    '<strong>Solution:</strong> Copy <code>urn_mapping.json</code> from your project directory to the WEB Viewer directory.';
+                document.getElementById('model-list').innerHTML = '';
+            });
+
+        function displayModels(urnMapping) {
+            const modelList = document.getElementById('model-list');
+            modelList.innerHTML = '<h2>Available Models (' + Object.keys(urnMapping).length + ')</h2>';
+
+            // Sort by month number
+            const sortedModels = Object.entries(urnMapping).sort((a, b) => {
+                const monthA = parseInt(a[0].match(/M(\d+)/)?.[1] || '0');
+                const monthB = parseInt(b[0].match(/M(\d+)/)?.[1] || '0');
+                return monthA - monthB;
+            });
+
+            sortedModels.forEach(([filename, info]) => {
+                const monthMatch = filename.match(/M(\d+)/);
+                const month = monthMatch ? monthMatch[1] : '??';
+
+                
+                // Determine stage badge
+                let stageBadge = '';
+                if (filename.includes('Foundation')) {
+                    stageBadge = '<span class="stage-badge stage-foundation">Foundation</span>';
+                } else if (filename.includes('Superstructure') && filename.includes('MEP')) {
+                    stageBadge = '<span class="stage-badge stage-superstructure">Superstructure & MEP</span>';
+                } else if (filename.includes('Superstructure')) {
+                    stageBadge = '<span class="stage-badge stage-superstructure">Superstructure</span>';
+                } else if (filename.includes('MEP') || filename.includes('Construction')) {
+                    stageBadge = '<span class="stage-badge stage-mep">MEP & Construction</span>';
+                } else if (filename.includes('outdoor')) {
+                    stageBadge = '<span class="stage-badge stage-outdoor">Outdoor</span>';
+                } else if (filename.includes('Handover')) {
+                    stageBadge = '<span class="stage-badge stage-handover">Handover</span>';
+                }
+
+                const urn = info.urn;
+                const viewerUrl = `/viewer.html?urn=${encodeURIComponent(urn)}`;
+
+                const modelItem = document.createElement('div');
+                modelItem.className = 'model-item';
+                modelItem.innerHTML = `
+                   <div class="model-name">
+                        M${month.padStart(2, '0')} - ${filename} ${stageBadge}
+                   </div>
+                   <a href="${viewerUrl}" target="_blank" class="model-link">
+                        🔗 Open in Viewer
+                   </a>
+                `;
+                modelList.appendChild(modelItem);
+            });
+
+            // Add recommended models section
+            const recommended = document.createElement('div');
+            recommended.style.marginTop = '30px';
+            recommended.style.padding = '20px';
+            recommended.style.backgroundColor = '#e8f5e9';
+            recommended.style.borderRadius = '8px';
+            recommended.innerHTML = `
+                <h3>⭐ Recommended for Screenshots</h3>
+                <p>For thesis/paper screenshots, we recommend these key milestones:</p>
+                <ul>
+                    <li><strong>M04</strong> - Foundation Complete (12%)</li>
+                    <li><strong>M08</strong> - Superstructure Mid-phase (39%)</li>
+                    <li><strong>M15</strong> - MEP & Interior Active (66%)</li>
+                    <li><strong>M20</strong> - Near Completion (90%)</li>
+                    <li><strong>M24</strong> - Handover Complete (100%)</li>
+                </ul>
+            `;
+            modelList.appendChild(recommended);
+        }
+
+        // Add a "Open M24 (Full Model)" button at the top
+        window.addEventListener('DOMContentLoaded', function() {
+            fetch('/urn_mapping.json')
+                .then(r => r.json())
+                .then(data => {
+                    const m24Entry = Object.entries(data).find(([name]) => name.includes('M24'));
+                    if (m24Entry) {
+                        const info = m24Entry[1];
+                        const urn = info.urn;
+
+                        const quickBtn = document.createElement('div');
+                        quickBtn.style.textAlign = 'center';
+                        quickBtn.style.margin = '20px 0';
+                        quickBtn.innerHTML = `
+                            <button onclick="window.open('/viewer.html?urn=${encodeURIComponent(urn)}', '_blank')"
+                                    style="font-size: 16px; padding: 15px 30px;">
+                                🚀 Quick Start: Open M24 (Complete Model)
+                            </button>
+                        `;
+                        const modelList = document.getElementById('model-list');
+                        if (modelList) {
+                            modelList.prepend(quickBtn);
+                        }
+                    }
+                })
+                .catch(() => {});
+        });
+    </script>
+</body>
+</html>

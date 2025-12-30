@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autodesk Forge 3D Viewer</title>
+
+    <!-- Autodesk Forge Viewer files -->
+    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css">
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #header {
+            background-color: #212121;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 10;
+            position: relative;
+        }
+
+        #header h1 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        #main-container {
+            display: flex;
+            height: calc(100% - 60px);
+            width: 100%;
+        }
+
+        #sidebar {
+            width: 300px;
+            background-color: #f5f5f5;
+            border-right: 1px solid #ddd;
+            padding: 15px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        #viewer-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #0696D7;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #loading-text {
+            font-size: 18px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #file-info {
+            margin-top: 10px;
+            color: #666;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        #error-message {
+            color: #D32F2F;
+            background-color: #FFEBEE;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            max-width: 400px;
+            text-align: center;
+            display: none;
+        }
+
+        #translation-progress {
+            width: 80%;
+            max-width: 400px;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+            display: none;
+        }
+
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #0696D7;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+
+        #status-text {
+            margin-top: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        #upload-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .button {
+            background-color: #0696D7;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+            transition: background-color 0.2s;
+        }
+
+        .button:hover {
+            background-color: #0587c0;
+        }
+
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #share-url {
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+            word-break: break-all;
+            max-width: 400px;
+        }
+
+        #share-url input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+
+        #share-button {
+            margin-top: 10px;
+        }
+
+        #model-info {
+            margin-bottom: 20px;
+        }
+
+        #model-info h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .info-item {
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .retry-button {
+            background-color: #FFA000;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .retry-button:hover {
+            background-color: #FF8F00;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Forge 3D Viewer</h1>
+        <div id="upload-container">
+            <button id="toggle-sidebar-button" class="button" style="display: none;">Model Info</button>
+            <button id="upload-button" class="button" onclick="document.getElementById('file-input').click()">Upload Model</button>
+            <input type="file" id="file-input" style="display: none" accept=".rvt,.rfa,.ifc,.dwg,.nwd,.3dm,.stp,.skp">
+            <select id="month-select" style="margin-left: 10px; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                <option value="">Select month</option>
+                <option value="1">M01</option>
+                <option value="2">M02</option>
+                <option value="3">M03</option>
+                <option value="4">M04</option>
+                <option value="5">M05</option>
+                <option value="6">M06</option>
+                <option value="7">M07</option>
+                <option value="8">M08</option>
+                <option value="9">M09</option>
+                <option value="10">M10</option>
+                <option value="11">M11</option>
+                <option value="12">M12</option>
+                <option value="13">M13</option>
+                <option value="14">M14</option>
+                <option value="15">M15</option>
+                <option value="16">M16</option>
+                <option value="17">M17</option>
+                <option value="18">M18</option>
+                <option value="19">M19</option>
+                <option value="20">M20</option>
+                <option value="21">M21</option>
+                <option value="22">M22</option>
+                <option value="23">M23</option>
+                <option value="24">M24</option>
+            </select>
+            <button id="apply-month-button" class="button" style="margin-left: 5px;">Apply month</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <div id="sidebar">
+            <div id="model-info">
+                <h3>Model Information</h3>
+                <div id="model-details">
+                    <!-- Model details will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="viewer-container">
+            <div id="loading-overlay">
+                <div class="spinner"></div>
+                <div id="loading-text">Initializing viewer...</div>
+                <div id="translation-progress">
+                    <div id="progress-bar"></div>
+                </div>
+                <div id="status-text"></div>
+                <div id="file-info"></div>
+                <div id="error-message"></div>
+                <button id="retry-button" class="retry-button">Retry</button>
+                <div id="share-url">
+                    <p>Share this model:</p>
+                    <input type="text" id="share-link" readonly>
+                    <button id="copy-button" class="button">Copy Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========= 1. 从 URL 里读 URN =========
+        const urlParams  = new URLSearchParams(window.location.search);
+        const initialUrn = urlParams.get('urn') || '';
+
+        let viewer      = null;  // 使用新 API: GuiViewer3D
+        let currentUrn  = initialUrn;
+        let retryCount  = 0;
+        let pollingTimer = null;
+        const MAX_RETRIES = 3;
+
+        // ========= 2. UI 辅助函数（保留你原来的也可以） =========
+        function updateLoadingStatus(message) {
+            const overlay     = document.getElementById('loading-overlay');
+            const statusText  = document.getElementById('status-text');
+            const fileInfo    = document.getElementById('file-info');
+
+            if (overlay) overlay.style.display = 'flex';
+            if (overlay) overlay.style.display = 'flex';
+            if (fileInfo && currentUrn) {
+                fileInfo.textContent = `URN: ${currentUrn}`;
+            }
+        }
+
+        function hideLoadingOverlay() {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function showError(message) {
+            console.error(message);
+            const errorDiv = document.getElementById('error-message');
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = message;
+            }
+            updateLoadingStatus(''); // 把 “Connecting to Forge…” 换掉
+        }
+
+        // ========= 3. 把 ACC URN 转成 derivative URN =========
+        function toBase64Urn(rawUrn) {
+            if (!rawUrn) return null;
+
+            // 如果已经是 base64 编码的 URN（不包含 ':'），直接返回
+            // base64 URN 格式: dXJuOmFkc2sud2lwcHJvZDp...
+            if (!rawUrn.includes(':') && /^[A-Za-z0-9+/]+$/.test(rawUrn)) {
+                console.log('URN is already base64 encoded:', rawUrn.substring(0, 50) + '...');
+                return rawUrn;
+            }
+
+            // 否则，这是原始 URN，需要 base64 编码
+            // 确保前面有 "urn:"
+            if (!rawUrn.startsWith('urn:')) {
+                rawUrn = 'urn:' + rawUrn;
+            }
+
+            console.log('Encoding URN to base64:', rawUrn);
+            // Forge 要求去掉 '=' padding
+            return btoa(rawUrn).replace(/=+$/, '');
+        }
+
+        // ========= 4. 从后端拿 Forge token =========
+        function getForgeToken(onTokenReady) {
+            fetch('/api/token')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch token from backend');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data || !data.access_token) {
+                        throw new Error('Token response missing access_token');
+                    }
+
+                    const accessToken = data.access_token;
+                    const expiresIn   = data.expires_in || 1799; // 秒
+
+                    console.log('Received Forge token, expires in', expiresIn, 'seconds');
+                    onTokenReady(accessToken, expiresIn);
+                })
+                .catch(error => {
+                    console.error('Error getting token:', error);
+                    showError('Failed to get Forge token: ' + (error.message || error));
+                });
+        }
+
+        // ========= 5. 实际加载模型 =========
+        function loadModel(rawUrn) {
+            if (!viewer) {
+                showError('Viewer is not initialized yet.');
+                return;
+            }
+
+            const base64Urn = toBase64Urn(rawUrn);
+            if (!base64Urn) {
+                showError('Invalid URN.');
+                return;
+            }
+
+            const documentId = 'urn:' + base64Urn;
+            console.log('Loading documentId:', documentId);
+
+            updateLoadingStatus('Loading model...');
+
+            Autodesk.Viewing.Document.load(
+                documentId,
+                function onDocumentLoadSuccess(doc) {
+                    console.log('Document loaded successfully');
+
+                    // 获取默认的 3D 视图
+                    const viewables = doc.getRoot().getDefaultGeometry();
+                    if (!viewables) {
+                        showError('No default viewable found in the document.');
+                        return;
+                    }
+
+                    // 加载模型到 viewer
+                    viewer.loadDocumentNode(doc, viewables).then(function(model) {
+                        console.log('Model loaded into viewer');
+
+                        // 隐藏加载覆盖层
+                        hideLoadingOverlay();
+
+                        // 设置环境和背景
+                        viewer.setLightPreset(10);
+                        viewer.setBackgroundColor(240, 240, 240, 240, 240, 240);
+
+                        // 适应视图
+                        viewer.fitToView();
+
+                        // 自动加载第一个月份的着色等待几秒让模型完全加载
+                        setTimeout(function() {
+                            console.log('Attempting to load initial month coloring...');
+                            loadAndApplyMonth(1);
+                        }, 2000);
+
+                        // 显示侧边栏按钮
+                        document.getElementById('toggle-sidebar-button').style.display = 'block';
+
+                        // 显示分享链接
+                        updateShareLink(currentUrn);
+                        document.getElementById('share-url').style.display = 'block';
+
+                        // 重置重试计数
+                        retryCount = 0;
+
+                    }).catch(function(error) {
+                        console.error('Error loading viewable:', error);
+                        showError('Error loading viewable geometry.');
+                        showRetryButton();
+                    });
+                },
+                function onDocumentLoadFailure(error) {
+                    console.error('Error loading document:', error);
+
+                    if (error.statusCode === 404) {
+                        showError('Model not found. The translation may still be in progress.');
+                        checkTranslationStatus(currentUrn);
+                    } else {
+                        showError('Error loading document. Model may not have finished translation in Forge.');
+                        showRetryButton();
+                    }
+                }
+            );
+        }
+
+        // ========= 6. 初始化 Viewer =========
+        function initializeViewer() {
+            if (!window.Autodesk || !Autodesk.Viewing) {
+                showError('Failed to load Autodesk Viewer library. Check network or CDN access.');
+                return;
+            }
+
+            updateLoadingStatus('Connecting to Forge services...');
+
+            const options = {
+                env: 'AutodeskProduction',
+                api: 'derivativeV2',
+                getAccessToken: getForgeToken
+            };
+
+            Autodesk.Viewing.Initializer(options, function (error) {
+                if (error) {
+                    console.error('Viewer initialization error:', error);
+                    showError('Failed to initialize the viewer: ' + (error.message || error));
+                    return;
+                }
+
+                console.log('Forge Viewer initialized.');
+
+                // 使用新 API: 直接创建 GuiViewer3D
+                const container = document.getElementById('viewer-container');
+                viewer = new Autodesk.Viewing.GuiViewer3D(container);
+
+                const startedCode = viewer.start();
+                if (startedCode > 0) {
+                    console.error('Failed to create viewer');
+                    showError('Failed to create viewer instance');
+                    return;
+                }
+
+                console.log('Viewer instance created successfully');
+
+                // 如果 URL 有 URN，加载模型
+                if (currentUrn) {
+                    loadModel(currentUrn);
+                } else {
+                    updateLoadingStatus('No model loaded. Please upload a file or provide a URN.');
+                }
+            });
+        }
+
+
+    // Update model info in sidebar
+        function updateModelInfo(doc) {
+            const modelDetails = document.getElementById('model-details');
+
+            // Clear previous info
+            modelDetails.innerHTML = '';
+
+            // Add basic info
+            const root = doc.getRoot();
+            addInfoItem(modelDetails, 'File Name', root.name() || 'Unknown');
+
+            // Try to get metadata
+            try {
+                const metadata = root.data ? root.data.metadata : null;
+                if (metadata) {
+                    if (metadata.guid) addInfoItem(modelDetails, 'GUID', metadata.guid);
+                    if (metadata.version) addInfoItem(modelDetails, 'Version', metadata.version);
+                    if (metadata.created) {
+                        const date = new Date(metadata.created);
+                        addInfoItem(modelDetails, 'Created', date.toLocaleString());
+                    }
+                }
+            } catch (e) {
+                console.log('Could not retrieve metadata:', e);
+            }
+        }
+
+        // Add an info item to the sidebar
+        function addInfoItem(container, label, value) {
+            const div = document.createElement('div');
+            div.className = 'info-item';
+            div.innerHTML = `<span class="info-label">${label}:</span> <span>${value}</span>`;
+            container.appendChild(div);
+        }
+
+        // Toggle sidebar visibility
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.style.display === 'none' || !sidebar.style.display) {
+                sidebar.style.display = 'block';
+            } else {
+                sidebar.style.display = 'none';
+            }
+        }
+
+        // Show retry button
+        function showRetryButton() {
+            document.getElementById('retry-button').style.display = 'block';
+        }
+
+        // Handle retry button click
+        function handleRetry() {
+            document.getElementById('retry-button').style.display = 'none';
+            hideError();
+
+            if (currentUrn) {
+                retryCount = 0;
+                loadModel(currentUrn);
+            } else {
+                initializeViewer();
+            }
+        }
+
+        // Check translation status for a model
+        function checkTranslationStatus(urn) {
+            updateLoadingStatus('Checking translation status...');
+
+            // Clear any existing polling timer
+            if (pollingTimer) {
+                clearTimeout(pollingTimer);
+            }
+
+            fetch(`/api/status?urn=${urn}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to check status: ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    // Update progress indication
+                    document.getElementById('translation-progress').style.display = 'block';
+                    const progressText = document.getElementById('status-text');
+
+                    // Update based on status
+                    switch (data.status) {
+                        case 'pending':
+                            updateLoadingStatus('Translation queued...');
+                            progressText.textContent = 'Waiting for processing to begin';
+                            document.getElementById('progress-bar').style.width = '10%';
+                            break;
+                        case 'inprogress':
+                            updateLoadingStatus('Translation in progress...');
+                            progressText.textContent = 'Converting model for viewing';
+                            document.getElementById('progress-bar').style.width = '50%';
+                            break;
+                        case 'success':
+                            updateLoadingStatus('Translation complete');
+                            progressText.textContent = 'Model ready for viewing';
+                            document.getElementById('progress-bar').style.width = '100%';
+                            break;
+                        case 'failed':
+                            throw new Error('Translation failed. Please check if the file format is supported.');
+                        default:
+                            updateLoadingStatus(`Translation status: ${data.status}`);
+                            document.getElementById('progress-bar').style.width = '30%';
+                    }
+
+                    if (data.viewer_ready) {
+                        // If translation is complete, load the model
+                        setTimeout(() => {
+                            document.getElementById('translation-progress').style.display = 'none';
+                            loadModel(urn);
+                        }, 1000);
+                    } else {
+                        // If still in progress, poll again after a delay
+                        pollingTimer = setTimeout(() => checkTranslationStatus(urn), 5000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking translation status:', error);
+                    showError('Failed to check translation status: ' + (error.message || 'Unknown error'));
+                    showRetryButton();
+                });
+        }
+
+        // Handle file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Reset the file input so the same file can be uploaded again if needed
+            document.getElementById('file-input').value = '';
+
+            // Show loading state
+            document.getElementById('loading-overlay').style.display = 'flex';
+            updateLoadingStatus('Uploading file...');
+            document.getElementById('file-info').textContent = `File: ${file.name} (${formatFileSize(file.size)})`;
+            hideError();
+            document.getElementById('retry-button').style.display = 'none';
+            document.getElementById('share-url').style.display = 'none';
+
+            // Validate file size (optional - can be adjusted)
+            const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+            if (file.size > MAX_FILE_SIZE) {
+                showError(`File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`);
+                return;
+            }
+
+            // Create FormData and append file
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Upload to the backend
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Upload failed: ' + response.statusText);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // Store the URN
+                currentUrn = data.urn;
+
+                // Update URL with the URN for sharing
+                const newUrl = window.location.origin + window.location.pathname + '?urn=' + data.urn;
+                window.history.pushState({}, '', newUrl);
+
+                // Update share link
+                updateShareLink(data.urn);
+
+                updateLoadingStatus('Translation started');
+
+                // Start polling for translation status
+                checkTranslationStatus(data.urn);
+            })
+            .catch(error => {
+                console.error('Error uploading file:', error);
+                showError('Failed to upload file: ' + (error.message || 'Unknown error'));
+                showRetryButton();
+            });
+        }
+
+        // Update the share link input
+        function updateShareLink(urn) {
+            const shareInput = document.getElementById('share-link');
+            const url = window.location.origin + window.location.pathname + '?urn=' + urn;
+            shareInput.value = url;
+        }
+
+        // Copy share link to clipboard
+        function copyShareLink() {
+            const shareInput = document.getElementById('share-link');
+            shareInput.select();
+            document.execCommand('copy');
+
+            // Visual feedback
+            const copyButton = document.getElementById('copy-button');
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Copied!';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 2000);
+        }
+
+        // Format file size in human-readable format
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+            else return (bytes / 1073741824).toFixed(1) + ' GB';
+        }
+
+        // Update loading status text
+        function updateLoadingStatus(message) {
+            document.getElementById('loading-text').textContent = message;
+        }
+
+        // Show an error message
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+
+        // Hide error message
+        function hideError() {
+            document.getElementById('error-message').style.display = 'none';
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (pollingTimer) {
+                clearTimeout(pollingTimer);
+            }
+        });
+
+        // Apply progress coloring from JSON data
+        function applyProgressColoringFromJson(jsonData) {
+            if (!viewer) {
+                console.warn('Viewer is not ready.');
+                return;
+            }
+
+            const completed = jsonData.completed || [];
+            const incomplete = jsonData.incomplete || [];
+
+            // Clear all previous theming colors
+            viewer.clearThemingColors();
+
+            // Grey for incomplete components
+            const grey = new THREE.Color(0.8, 0.8, 0.8);
+            incomplete.forEach(dbId => {
+                viewer.setThemingColor(dbId, grey);
+            });
+
+            // Green for completed components
+            const green = new THREE.Color(0.0, 0.7, 0.2);
+            completed.forEach(dbId => {
+                viewer.setThemingColor(dbId, green);
+            });
+
+            console.log(`Applied coloring: ${completed.length} completed (green), ${incomplete.length} incomplete (grey)`);
+        }
+
+        // Load and apply month coloring
+        // Load and apply month coloring from progress_history.json
+        function loadAndApplyMonth(month) {
+            if (!viewer) {
+                alert('Viewer is not ready yet');
+                return;
+            }
+
+            const monthKey = 'M' + month.toString().padStart(2, '0');
+
+            fetch('/progress_history.json')
+                .then(resp => {
+                    if (!resp.ok) {
+                        throw new Error('Failed to load progress_history.json: ' + resp.statusText);
+                    }
+                    return resp.json();
+                })
+                .then(historyArray => {
+                    // progress_history.json 是数组格式，需要找到对应月份
+                    const monthData = historyArray.find(item =>
+                        item.model_name && item.model_name.startsWith(monthKey)
+                    );
+
+                    if (!monthData) {
+                        throw new Error('No data found for month ' + monthKey + ' in progress_history.json');
+                    }
+
+                    console.log('Found month data:', monthData.model_name);
+
+                    // 获取 categorized_dbids（按阶段分类的 dbId）
+                    const categorized = monthData.categorized_dbids;
+                    if (!categorized) {
+                        throw new Error('No categorized_dbids found for ' + monthKey);
+                    }
+
+                    // 收集所有已完工的 dbId（注意：dbId 可能是字符串，需要转换为数字）
+                    const completedDbIds = [];
+                    ['Foundation', 'Superstructure', 'MEP', 'Interior', 'Outdoor'].forEach(stage => {
+                        if (categorized[stage] && Array.isArray(categorized[stage])) {
+                            categorized[stage].forEach(id => {
+                                // 转换为数字（如果是字符串）
+                                const numId = typeof id === 'string' ? parseInt(id) : id;
+                                if (!isNaN(numId)) {
+                                    completedDbIds.push(numId);
+                                }
+                            });
+                        }
+                    });
+
+                    console.log('Completed dbIds count:', completedDbIds.length);
+
+                    // 获取所有 dbId（遍历模型树）
+                    const allDbIds = [];
+                    const tree = viewer.model.getInstanceTree();
+                    if (tree) {
+                        tree.enumNodeChildren(tree.getRootId(), function(dbId) {
+                            allDbIds.push(dbId);
+                        }, true);
+                    }
+
+                    console.log('All dbIds count:', allDbIds.length);
+
+                    // 计算未完工的 dbId
+                    const incompletedDbIds = allDbIds.filter(id => !completedDbIds.includes(id));
+
+                    // 应用着色
+                    viewer.clearThemingColors();
+
+                    // 绿色 = 已完工
+                    const green = new THREE.Vector4(0.0, 0.7, 0.2, 1.0);
+                    completedDbIds.forEach(dbId => {
+                        viewer.setThemingColor(dbId, green);
+                    });
+
+                    // 灰色 = 未完工
+                    const grey = new THREE.Vector4(0.8, 0.8, 0.8, 1.0);
+                    incompletedDbIds.forEach(dbId => {
+                        viewer.setThemingColor(dbId, grey);
+                    });
+
+                    console.log(`Applied coloring for ${monthKey}: ${completedDbIds.length} completed (green), ${incompletedDbIds.length} incomplete (grey)`);
+
+                    // 计算进度百分比
+                    const totalComponents = monthData.total || completedDbIds.length;
+                    const progressPct = ((totalComponents / allDbIds.length) * 100).toFixed(1);
+
+                    alert(`Applied progress coloring for ${monthKey}\nModel: ${monthData.model_name}\nProgress: ${progressPct}%\nCompleted: ${completedDbIds.length} components (green)\nIncomplete: ${incompletedDbIds.length} components (grey)`);
+                })
+                .catch(err => {
+                    console.error('Error applying progress coloring:', err);
+                    alert('Failed to apply progress coloring for month ' + month + '\n' + err.message);
+                });
+        }
+
+        // ========= 页面加载时初始化 =========
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, initializing viewer...');
+            console.log('Initial URN from URL:', currentUrn);
+
+            // 设置事件监听器
+            document.getElementById('file-input').addEventListener('change', handleFileUpload);
+            document.getElementById('toggle-sidebar-button').addEventListener('click', toggleSidebar);
+            document.getElementById('retry-button').addEventListener('click', handleRetry);
+            document.getElementById('copy-button').addEventListener('click', copyShareLink);
+
+            // Apply month button
+            document.getElementById('apply-month-button').addEventListener('click', function() {
+                const select = document.getElementById('month-select');
+                const month = select.value;
+                if (month) {
+                    loadAndApplyMonth(parseInt(month));
+                } else {
+                    alert('Please select a month first');
+                }
+            });
+
+            // 初始化 Forge Viewer
+            initializeViewer();
+        });
+    </script>
+</body>
+</html>
