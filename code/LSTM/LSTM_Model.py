@@ -105,7 +105,7 @@ class LSTMSeq2SeqMass(nn.Module):
         """
         B, L, Fh = x_hist.shape
         B2, H, Ff = x_fut.shape
-        assert B == B2, "x_hist/x_fut batch 不一致"
+        assert B == B2, "x_hist/x_fut batch is inconsistent"
 
         # 1) Encode history
         enc_out, _ = self.enc(x_hist)         # (B,L,Hs)
@@ -323,3 +323,4 @@ if __name__ == "__main__":
     x_fut = torch.randn(B, H, in_fut)
     out = model(x_hist, x_fut)
     print("p50 shape:", out['p50'].shape)
+
