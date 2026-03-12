@@ -558,7 +558,6 @@ def visualize_predictions(test_df, test_project_ids, model, config, scaler,
         if 'total_duration_months' in project_data.columns:
             total_duration = float(project_data.iloc[0]['total_duration_months'])
         else:
-            # 如果列不存在，通过反缩放计算
             month_idx = hist_cols.index('month')
             rem_idx = hist_cols.index('remaining_months')
             sample_scaled = project_data.iloc[[0]][hist_cols].to_numpy()
@@ -573,7 +572,6 @@ def visualize_predictions(test_df, test_project_ids, model, config, scaler,
         for mseq in result['months']:
             mseq = np.asarray(mseq, dtype=float).reshape(-1, 1)
 
-            # 只反缩放 month 一列（按 scaler 列序）
             dummy = np.zeros((len(mseq), scaler.n_features_in_), dtype=float)
             dummy[:, month_idx_s] = mseq.ravel()
             raw_months = scaler.inverse_transform(dummy)[:, month_idx_s]
@@ -865,4 +863,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
