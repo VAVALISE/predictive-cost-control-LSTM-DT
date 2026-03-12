@@ -45,7 +45,7 @@ def get_forge_token():
             print("[ERROR] Could not import Forge modules from parent directory")
             return ''
 
-        # Initialize ForgeClient（内部会用环境变量读取 FORGE_CLIENT_ID / SECRET）
+        # Initialize ForgeClient (Internally, it reads FORGE_CLIENT_ID / SECRET from environment variables)
         ForgeClient = getattr(acc_file_tool, 'ForgeClient', None)
         if ForgeClient is None:
             print("[ERROR] ACC_File_Tool has no class ForgeClient")
