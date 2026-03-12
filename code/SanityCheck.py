@@ -264,7 +264,7 @@ def check_logic_realism(df):
         "infrastructure": {"mat": (0.45, 0.55), "lab": (0.22, 0.32), "equip": (0.12, 0.18), "admin": (0.04, 0.07)}
     }
 
-    # 为了贴近真实扰动，给区间加一点容差（±3%）
+    # To better reflect real disturbances, a tolerance of ±3% is added to the interval.
     MARGIN = 0.03
     for k in PROJECT_TYPES:
         for c in PROJECT_TYPES[k]:
@@ -276,7 +276,7 @@ def check_logic_realism(df):
         project_data = df[df['project_id'] == pid].sort_values('month')
         ptype = project_data.iloc[0]['project_type']
 
-        # 选择口径：排除收尾期
+        # Select caliber: Exclude the closing period
         if EXCLUDE_COMPLETION_PHASE:
             core = project_data[project_data['is_completion_phase'] == False].copy()
             if core.empty:
@@ -285,12 +285,12 @@ def check_logic_realism(df):
             core = project_data.copy()
 
         if USE_WEIGHTED_RATIOS:
-            # 用“各月成本占比”的进度加权平均，更贴近施工主干期
+            # Using a progress-weighted average based on the "cost percentage for each month" more closely reflects the main construction phase.
             prog = core['progress_pct'].values
             w = np.r_[prog[0], np.diff(prog)]
             w = np.clip(w, 0, None)
             if w.sum() == 0:
-                w = np.ones_like(w)  # 兜底
+                w = np.ones_like(w) 
             w = w / w.sum()
 
             mat_ratio = np.average(core['material_cost'] / core['total_cost'], weights=w)
@@ -298,7 +298,7 @@ def check_logic_realism(df):
             equip_ratio = np.average(core['equip_cost'] / core['total_cost'], weights=w)
             admin_ratio = np.average(core['admin_cost'] / core['total_cost'], weights=w)
         else:
-            # 简单全周期求和（原口径）
+            # Simple total period summation (original caliber)
             total_mat = core['material_cost'].sum()
             total_lab = core['labour_cost'].sum()
             total_equip = core['equip_cost'].sum()
@@ -648,4 +648,5 @@ if __name__ == "__main__":
     run_sanity_check(
         data_file="data/generated/synthetic_CN_projects.csv",
         output_dir="data/validation_plots/"
+
     )
