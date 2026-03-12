@@ -140,7 +140,6 @@ class ForgeClient:
             return False
         newt = r.json()
         newt["obtained_at"] = int(time.time())
-        # 有的返回不重复带 refresh_token，保留旧的
         if "refresh_token" not in newt and "refresh_token" in t:
             newt["refresh_token"] = t["refresh_token"]
         self._save_3leg(newt)
@@ -199,7 +198,7 @@ class ForgeClient:
 
         logger.info(f"Searching for existing item '{file_name}' in folder {folder_id}")
 
-        fid = quote(folder_id, safe='')  # ← 必须编码
+        fid = quote(folder_id, safe='') 
         url = f"https://developer.api.autodesk.com/data/v1/projects/{project_id}/folders/{fid}/contents"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -833,4 +832,5 @@ if __name__ == "__main__":
         poll_sec=10,
         processed_db="processed.json",
         run_derivative=True
+
     )
