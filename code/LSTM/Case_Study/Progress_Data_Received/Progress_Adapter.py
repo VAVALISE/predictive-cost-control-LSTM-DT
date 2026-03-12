@@ -9,8 +9,6 @@ Key Features:
 - Analyzes component type distribution in delta
 - Determines current construction stage
 - Matches with Preview_progress_fusion.csv for weighted progress
-
-Date: 2024-11-14 (Updated for fusion CSV)
 """
 
 import os
@@ -1469,4 +1467,5 @@ if __name__ == "__main__":
     print("• Analyzes component delta and distribution")
     print("• Matches with Preview_progress_fusion.csv")
     print("• Export viewer coloring JSON with --export-viewer-month")
+
     print("="*70)
