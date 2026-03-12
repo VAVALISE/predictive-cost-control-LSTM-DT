@@ -1,212 +1,163 @@
-# LSTM-BIM Digital Twin Construction Cost Forecasting Dataset
+# LSTM-DT Construction Cost Forecasting Dataset
 
 ## Overview
 
-This dataset accompanies the research paper on LSTM-based construction cost forecasting integrated with Digital Twin (DT) technology and Building Information Modeling (BIM). It provides a curated implementation of a predictive cost management system for construction projects, combining deep learning models with real-time BIM verification through Autodesk Construction Cloud (ACC).
+This dataset accompanies the paper "A predictive–comparative framework for construction cost control using long short-term memory and digital twin technologies." It supports a predictive cost governance system for construction projects that couples LSTM-based cost forecasting with Digital Twin (DT) progress verification through Autodesk Construction Cloud (ACC) and Autodesk Platform Services (APS).
 
-The dataset enables researchers and practitioners to:
-- Train LSTM models for multi-month construction cost prediction
-- Validate predictions against BIM-verified progress data
-- Implement governance triggers for project risk management
-- Compare forecasting methods (LSTM vs. traditional baselines)
-- Reproduce all experiments from the accompanying research paper
+The dataset supports researchers and practitioners in:
+- Training LSTM models for multi-month construction cost forecasting
+- Validating predictions against DT-verified progress data
+- Implementing two-tier governance triggers for project cost risk management
+- Comparing forecasting methods (LSTM vs. statistical and engineering baselines)
+- Reproducing the experiments reported in the accompanying paper
 
 ---
 
 ## Dataset Contents
 
-### 1. Training Data
+### 1. Synthetic Training Data
 
-**File**: `data/generated/synthetic_CN_projects.csv` (838 records, 30 projects)
+**File**: `data/generated/synthetic_CN_projects.csv` (3,183 records, 120 projects)
 
-Synthetically generated construction project data following realistic Chinese construction industry patterns:
+A synthetic multi-project time-series dataset constructed for this study to enable controlled and reproducible evaluation where large multi-project cost records are not openly available in practice. The dataset follows a simulation-driven synthetic-data design with component-level cost decomposition and channel-aligned exogenous indices.
+
 - **Project types**: Residential, Commercial, Municipal, Industrial, Infrastructure
-- **Duration range**: 18-36 months per project
-- **Monthly records**: Cost breakdowns (material, labor, equipment, administration)
-- **Economic indices**: CPI, PPI, MPPI, Labor cost indices
-- **Progress tracking**: S-curve based completion percentages
-- **Completion phases**: Realistic modeling of project final months with reduced material/equipment costs
+- **Duration range**: 18–36 months per project
+- **Monthly records**: Cost breakdowns (material, labour, equipment, administration)
+- **Economic indices**: CPI, PPI, MPPI, Labour cost index (chained from Aug-2022 = 100)
+- **Progress tracking**: S-curve-based cumulative completion percentages
+- **Data split**: 24 projects held out as test set; 96 projects used for cross-validation
 
-**Key features**:
-- Realistic cost distributions by project type
-- Completion phase modeling (last 2-3 months with acceptance activities)
-- Time-aware features (normalized time, remaining months)
-- Multi-component cost breakdown
+**Key design principles**:
+- Component-level cost decomposition with nationally representative cost-composition ratios
+- Channel-aligned exogenous indices constraining simulated trajectories to plausible cost dynamics
+- Project-level GroupKFold cross-validation to prevent data leakage across projects
+- Five-fold CV with five seeds per fold (25 models total) to reduce optimisation variance
 
 ### 2. Case Study Data
 
-**File**: `data/real_project/Preview_case_input_for_LSTM.csv` (25 records, 12 months)
+**File**: `data/input_csv_data/model_project/Preview_case_input_for_LSTM.csv`
 
-Real construction project input data for case study validation:
-- **Project**: CN001 (Chengbei Construction Project)
-- **Input window**: 12 months of historical data (Month 1-12)
-- **Purpose**: Anchor point for LSTM rolling prediction
+Real construction project input data for out-of-sample case study instantiation:
+- **Project**: CN001 (Chengbei Construction Project, 24-month building project)
+- **Input window**: 12 months of historical data (Month 1–12)
+- **Purpose**: Anchor point for LSTM rolling prediction in the integrated workflow
 - **Contains**: Cost share percentages, component ratios, cumulative progress
 
-**File**: `data/real_project/Preview_progress_fusion.csv`
+**File**: `data/input_csv_data/real_project/Preview_progress_fusion.csv`
 
-DT hybrid verified progress combining:
-- BIM model analysis (component counts from Revit models)
-- On-site progress verification
-- Weighted progress calculation (APS_CumWeighted6)
-- Month-by-month actual completion percentages
+DT hybrid verified progress data combining:
+- BIM model analysis (component counts from Revit models via APS Viewer)
+- Contract-weighted stage completion (cost-weighted earned-value proxy)
+- Month-by-month hybrid DT progress percentages (APS_CumWeighted6)
 
-**File**: `data/real_project/Chengbei_24m_work.csv` (27 records, 24 months)
+**File**: `data/input_csv_data/real_project/Chengbei_24m_work.csv`
 
 Contract baseline curve with planned progress:
 - Monthly planned progress percentages
-- Work breakdown by construction phase
-- Foundation, superstructure, MEP, interior, outdoor, handover stages
-- Serves as contractual reference for deviation analysis
+- Work breakdown by construction phase (foundation, superstructure, MEP, interior, outdoor, handover)
+- Serves as contractual reference for deviation analysis in the governance layer
 
-### 3. Configuration Files
+### 3. Model Files
 
-**File**: `industry_config.json` (project root)
+**Directory**: `code/models/cv5_seeds5_stratified/`
 
-Economic index parameters for Chinese construction industry:
-```json
-{
-  "CN": {
-    "CPI": {"base_value": 1.0, "avg_growth": 0.002, "volatility": 0.005},
-    "PPI": {"base_value": 1.0, "avg_growth": 0.003, "volatility": 0.008},
-    "MPPI": {"base_value": 1.0, "avg_growth": 0.004, "volatility": 0.010},
-    "Labor": {"base_value": 1.0, "avg_growth": 0.005, "volatility": 0.006}
-  }
-}
-```
+- `model_config_example.json`: Representative per-run configuration for fold 0, seed 0. Documents model architecture (hidden size: 128, layers: 2, dropout: 0.2), input features (13 historical features, 7 future features), training hyperparameters (Adam optimiser, lr=0.001, batch size=32, MixedLoss with MSE weight=0.7 and MAE weight=0.3), and GroupKFold validation split.
+- `cv_summary.json`: Aggregated cross-validation summary across all 25 fold–seed runs, including per-fold best validation loss, per-run training details, and overall statistics (mean val_loss=0.0201).
+- `test_projects.json`: Held-out test set project IDs (n=24), split mode (stratified_random), and random seed (2025) for reproducibility verification.
 
-**File**: `models/model_config.json`
+### 4. Configuration Files
 
-Model architecture and training configuration:
-- Sequence length (12 months input window)
-- Prediction horizon (3 months rolling forecast)
-- Hidden layer dimensions (128 units, 2 layers)
-- Feature definitions and scaling parameters
-- Training hyperparameters (learning rate, batch size, epochs)
+**File**: `industry_config.json`
 
-### 4. Code Files
+Economic index parameters for Chinese construction industry simulation:
+- CPI, PPI, MPPI, Labour wage index base values, drift, and volatility parameters
+- Consistent with Table 3 in the accompanying paper
 
-**Core Training & Prediction** (`code/LSTM/`):
-- `LSTM_Model.py`: Three model architectures (LSTMCostForecast, LSTMMultiOutput, LSTMSeq2SeqMass)
-- `Train.py`: Single model training with early stopping and learning rate scheduling
-- `Train_CV.py`: 5-fold cross-validation with multi-seed training (5 seeds per fold = 25 models)
-- `Prediction.py`: Single model inference with anchoring and industry index integration
-- `Prediction_Ensemble.py`: Multi-seed ensemble evaluation (median, mean, weighted strategies)
+### 5. Code Files
 
-**Case Study Pipeline** (`code/Case_Study/`):
+**Core Training** (`code/LSTM/`):
+- `LSTM_Model.py`: Seq2Seq encoder–decoder LSTM architecture
+- `Train.py`: Single model training with early stopping and learning-rate scheduling
+- `Train_CV.py`: Five-fold GroupKFold cross-validation with multi-seed training (5 seeds per fold = 25 models)
+- `Prediction.py`: Single model inference
+- `Prediction_Ensemble.py`: Ensemble evaluation (median, mean, weighted aggregation)
+
+**Case Study Pipeline** (`code/LSTM/Case_Study/`):
 - `Prediction_CS.py`: Multi-model prediction on real project data
 - `Combine_Ensemble_CS.py`: Ensemble aggregation with P10/P50/P90 quantiles
-- `Compare_Prediction.py`: Three-way comparison (LSTM vs. DT vs. Baseline)
-- `Governance_Triggers.py`: Automated risk detection with soft/hard thresholds
+- `Compare_Prediction.py`: Three-way comparison (LSTM vs. DT vs. baseline)
+- `Governance_Triggers.py`: Two-tier tolerance–duration governance logic
 - `Run_Case_Study.py`: End-to-end automation script
-- `Sensitivity_Analysis.py`: Robustness testing across parameter variations
+- `Sensitivity_Analysis.py`: Budget scaling and governance parameter robustness tests
 
-**Experiments** (`code/experiments/`):
-- `Baseline_Models.py`: Traditional forecasting methods (EVM/CPI, ARIMA, ETS, Prophet, VAR)
-- `Run_Baseline_Comparison.py`: Experiment 2 - Comparative evaluation of forecasting methods
-- `Run_Ablation_Study.py`: Experiment 1 - Governance layer incremental value analysis
+**Supplementary Experiments** (`code/LSTM/Case_Study/Supplementary_Experiments/`):
+- `Baseline_Models.py`: Statistical and engineering baselines (EVM+CPI, ARIMA, ETS, Prophet, Naïve, VAR)
+- `Run_Baseline_Comparison.py`: Baseline comparison experiment (Experiment 2)
+- `Run_Ablation_Study.py`: Governance layer ablation study (Experiment 1)
+- `Export_Descriptive_Stats.py`: Generates descriptive statistics for the synthetic training dataset (Table 1 in the accompanying paper)
+- `Run_Learning_Curve.py`: Generates training and validation learning curves (Supplementary Figure S1)
 
-**Data Generation** (`code/generator/`):
-- `ModelGenerator.py`: Synthetic project data generator with configurable parameters
-- `SanityCheck.py`: Data quality validation and integrity checks
+**BIM Integration** (`code/LSTM/Case_Study/Progress_Data_Received/`):
+- `Progress_Adapter.py`: DT progress extraction and cost-weighted aggregation
+- `Progress_Viewer.py`: APS Viewer integration for BIM component analysis
+- `ACC_File_Tool.py`: ACC file management utilities
+- `urn_mapper.py`: URN mapping for Autodesk model identification
+- `WEB Viewer/`: Local web viewer for APS model inspection (local_server.py, viewer.html, model_links.html)
 
-### 5. Pre-trained Models (Optional)
-
-**Single model** (`models/`):
-- `model_config.json`: Architecture and training metadata
-
----
-
-## Key Features
-
-### 1. LSTM-Based Forecasting
-- **Architecture**: Seq2Seq with attention mechanism
-- **Input window**: 12 months of historical data
-- **Prediction horizon**: Rolling 3-month forecast
-- **Features**: Multi-variate (cost components, indices, time features, progress)
-- **Uncertainty quantification**: Multi-seed ensemble with probabilistic outputs
-
-### 2. Digital Twin Integration (Optional Component)
-
-**Prerequisites for BIM integration**:
-- Autodesk Construction Cloud (ACC) subscription
-- Forge API credentials with OAuth 3-legged authentication
-- Access to Revit models (24 monthly models, M01-M24)
-- Network access to Autodesk API endpoints
-
-**Note**: The core LSTM forecasting functionality works independently without BIM integration. BIM verification provides additional validation but is not required for basic model training and prediction.
-
-**BIM capabilities** (when prerequisites are met):
-- **BIM verification**: Revit model component analysis (24 monthly models, M01-M24)
-- **Progress fusion**: Weighted combination of BIM counts and site verification
-- **API integration**: Autodesk Construction Cloud (ACC) and Forge APIs
-- **Automation**: OAuth 3-legged authentication, scheduled model updates
-
-### 3. Governance Triggers
-- **Soft threshold**: 5% cumulative deviation warning
-- **Hard threshold**: 10% cumulative deviation intervention
-- **Duration filter**: Minimum 2 consecutive months to avoid false alarms
-- **Risk heatmap**: Visual identification of critical periods
-- **Automated alerts**: Project management notifications
-
-### 4. Comprehensive Experiments
-
-**Experiment 1: Ablation Study** (Governance Layer Value)
-- Tests 6 drift scenarios
-- Compares 4 system configurations: Forecast-only, DT-only, Fusion, Fusion+Governance
-- Metrics: False alarm rate, average trigger duration, detection precision
-- Result: Governance reduces false alarms from 100% to 0%
-
-**Experiment 2: Baseline Comparison** (LSTM Superiority)
-- Baselines: Naive forecast, EVM/CPI, ARIMA, ETS, Prophet, VAR
-- Ensures fairness: All methods use identical multivariate features
-- Evaluation: MAE, RMSE, R², WAPE, Pinball loss, Interval score
-
-**Experiment 3: Trigger Sensitivity Analysis** (Governance Robustness)
-- Grid search: Tolerance (3-12%) × Duration (1-5 months)
-- Validates governance rules across parameter ranges
-- Identifies optimal threshold-duration combinations
+**Data Generation** (`code/`):
+- `ModelGenerator.py`: Synthetic project data generator
+- `SanityCheck.py`: Data quality validation
+- `generate_requirements.py`: Scans project source files and generates requirements.txt automatically
 
 ---
 
 ## Technical Requirements
 
 ### Software Dependencies
-- **Python**: 3.8+ (3.10+ recommended)
-- **PyTorch**: 1.12+ for deep learning models
-- **scikit-learn**: 1.0+ for preprocessing and metrics
-- **pandas**: 1.3+ for data manipulation
-- **numpy**: 1.21+ for numerical operations
-- **matplotlib/seaborn**: Visualization
-- **statsmodels**: For baseline time series models (ARIMA, ETS, VAR)
-- **prophet**: For Facebook Prophet baseline
+
+See `requirements.txt` for exact pinned versions. Key dependencies:
+
+- **Python**: 3.10
+- **PyTorch**: 2.8.0
+- **scikit-learn**: 1.7.2
+- **pandas**: 2.3.3
+- **numpy**: 2.2.5
+- **statsmodels**: 0.14.6
+- **prophet**: 1.2.1
+- **matplotlib / seaborn**: Visualisation
+
+**Tested environment**: Python 3.10, Windows 11
+
+Install all dependencies:
+```bash
+pip install -r requirements.txt
+```
 
 ### Hardware Requirements
-- **Minimum**: CPU-only, 8GB RAM
-- **Recommended**: NVIDIA GPU with CUDA support, 16GB+ RAM
-- **Training time**: 
-  - Single model: ~10-20 minutes on CPU, ~2-5 minutes on GPU
-  - 5-fold CV (25 models): ~4-8 hours on CPU, ~30-60 minutes on GPU
+
+- **Minimum**: CPU-only, 8 GB RAM
+- **Recommended**: NVIDIA GPU with CUDA support, 16 GB+ RAM
+- **Training time (25 models)**:
+  - CPU: approximately 4–8 hours
+  - GPU: approximately 30–60 minutes
 
 ### BIM Integration (Optional)
-**Note**: BIM integration is optional. Core forecasting functionality works without these components.
 
-**Requirements** (if using BIM features):
-- **Autodesk Account**: Required for ACC/Forge API access
-- **OAuth Setup**: 3-legged authentication configuration
-- **Revit Models**: 24 monthly models (M01-M24) for progress tracking
-- **Network Access**: API endpoints must be accessible
+The core LSTM forecasting and governance functionality operates independently without BIM integration. DT verification provides the progress evidence layer but requires:
+
+- Autodesk Construction Cloud (ACC) subscription
+- APS/Forge API credentials with OAuth 3-legged authentication
+- Access to Revit models (monthly snapshots M01–M24)
+- Network access to Autodesk API endpoints
 
 ---
 
-## Quick Start Guide
+## Quick Start
 
-### 1. Train Models from Scratch
+### 1. Train Models
 
 ```bash
-# Single model training
-python code/LSTM/Train.py
-
 # Cross-validation training (25 models)
 python code/LSTM/Train_CV.py --n_folds 5 --n_seeds 5
 ```
@@ -214,11 +165,10 @@ python code/LSTM/Train_CV.py --n_folds 5 --n_seeds 5
 ### 2. Run Case Study
 
 ```bash
-# Complete pipeline (prediction → ensemble → comparison → governance)
-python code/Case_Study/Run_Case_Study.py \
-    --cv_model_dir models/cv_models \
-    --input_csv data/real_project/Preview_case_input_for_LSTM.csv \
-    --actual_csv data/real_project/Preview_progress_fusion.csv \
+python code/LSTM/Case_Study/Run_Case_Study.py \
+    --cv_model_dir code/models/cv5_seeds5_stratified \
+    --input_csv data/input_csv_data/model_project/Preview_case_input_for_LSTM.csv \
+    --actual_csv data/input_csv_data/real_project/Preview_progress_fusion.csv \
     --total_budget 40000000 \
     --n_folds 5 \
     --n_seeds 5
@@ -227,59 +177,70 @@ python code/Case_Study/Run_Case_Study.py \
 ### 3. Reproduce Experiments
 
 ```bash
-# Experiment 1: Ablation study
-python code/experiments/Run_Ablation_Study.py
-
-# Experiment 2: Baseline comparison
-python code/experiments/Run_Baseline_Comparison.py \
+# Baseline comparison
+python code/LSTM/Case_Study/Supplementary_Experiments/Run_Baseline_Comparison.py \
     --case_dir outputs/case_study_latest
+
+# Ablation study
+python code/LSTM/Case_Study/Supplementary_Experiments/Run_Ablation_Study.py
+
+# Descriptive statistics (Table 1)
+python code/LSTM/Case_Study/Supplementary_Experiments/Export_Descriptive_Stats.py \
+    --data_csv data/generated/synthetic_CN_projects.csv
 ```
 
-### 4. Generate New Synthetic Data
+### 4. Generate Synthetic Data
 
 ```bash
-# Generate 50 new projects
-python code/generator/ModelGenerator.py
-# This creates: data/generated/synthetic_CN_projects.csv
-
-# Validate data quality
-python code/generator/SanityCheck.py
+python code/ModelGenerator.py
+python code/SanityCheck.py
 ```
 
 ---
 
 ## Data Formats
 
-### CSV Column Specifications
+### synthetic_CN_projects.csv
 
-**synthetic_CN_projects.csv** (Training data):
-- `project_id`: Unique identifier (P001-P030)
-- `project_type`: Category (residential/commercial/municipal/industrial/infrastructure)
-- `project_type_name`: Human-readable type name
-- `total_duration_months`: Project duration (18-36 months)
-- `month`: Current month (1 to total_duration_months)
-- `progress_pct`: Cumulative completion percentage (0-100%)
-- `is_completion_phase`: Boolean flag for final months (TRUE/FALSE)
-- `mat_index`, `lab_index`, `cpi_index`: Economic indices
-- `material_cost`, `labour_cost`, `equip_cost`, `admin_cost`: Cost components (CNY)
-- `total_cost`: Sum of all cost components (CNY)
+| Column | Description |
+|--------|-------------|
+| `project_id` | Unique identifier (P001–P120) |
+| `project_type` | Category (residential/commercial/municipal/industrial/infrastructure) |
+| `total_duration_months` | Project duration (18–36 months) |
+| `month` | Current month index |
+| `progress_pct` | Cumulative completion percentage (0–100%) |
+| `mat_index`, `cpi_index`, `lab_index` | Economic indices (chained, normalised) |
+| `material_cost`, `labour_cost`, `equip_cost`, `admin_cost` | Monthly cost components (CNY) |
+| `total_cost` | Sum of cost components (CNY) |
 
-**Preview_case_input_for_LSTM.csv** (Case study input):
-- `project_id`: Project identifier (CN001)
-- `month_index`: Sequential month number (1-12)
-- `month_name`: Calendar month (Sep-25, Oct-25, ...)
-- `labour_ratio`, `material_ratio`, `equipment_ratio`, `admin_ratio`: Cost proportions
-- `*_share_pct`: Monthly and cumulative cost shares (percentage)
-- `cumulative_cost_pct`: Total completion percentage
+### Preview_case_input_for_LSTM.csv
 
-**Preview_progress_fusion.csv** (DT verification):
-- `Month`: Month identifier (M01, M02, ...)
-- `APS_CumWeighted6`: DT hybrid cumulative progress (percentage string, e.g., "45.2%")
-- Additional columns: Component counts, weighted scores
+| Column | Description |
+|--------|-------------|
+| `project_id` | Project identifier (CN001) |
+| `month_index` | Sequential month number (1–12) |
+| `labour_ratio`, `material_ratio`, `equipment_ratio`, `admin_ratio` | Cost component proportions |
+| `cumulative_cost_pct` | Cumulative cost share percentage |
 
-**Chengbei_24m_work.csv** (Contract baseline):
-- `project_id`, `month_index`, `month_name`: Identifiers
-- `*_share_pct`: Phase-specific progress (foundation, superstructure, equipment, interior, outdoor, handover)
-- `monthly_total_share_pct`: Planned monthly progress increment
-- `cumulative_share_pct`: Planned cumulative progress
-- `work_*`: Textual descriptions of planned activities
+### Preview_progress_fusion.csv
+
+| Column | Description |
+|--------|-------------|
+| `Month` | Month identifier (M01–M24) |
+| `APS_CumWeighted6` | DT hybrid cumulative progress (cost-weighted earned-value proxy, %) |
+
+### Chengbei_24m_work.csv
+
+| Column | Description |
+|--------|-------------|
+| `month_index` | Month number (1–24) |
+| `cumulative_share_pct` | Planned cumulative progress (contractual baseline) |
+| `monthly_total_share_pct` | Planned monthly progress increment |
+
+---
+
+## Reproducibility Notes
+
+- The held-out test set (24 projects) is recorded in `test_projects.json` with the random seed (2025) and split mode used for the data partition reported in the paper.
+- The `model_config_example.json` documents the architecture and training configuration for a representative single run (fold 0, seed 0). All 25 runs share the same architecture; fold index and random seed are the only run-specific parameters.
+- Full cross-validation results across all 25 runs, including per-fold validation loss and convergence details, are provided in `cv_summary.json`.

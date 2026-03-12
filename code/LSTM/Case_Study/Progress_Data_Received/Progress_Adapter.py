@@ -55,14 +55,11 @@ class ComponentIncrementalAnalyzer:
     """
 
     def __init__(
-    self,
-    lookup_csv: str = None,
-):
-    if lookup_csv is None:
-        project_root = Path(__file__).parent
-        lookup_csv = project_root / "data" / "Preview_progress_fusion.csv"
-    self.lookup_csv = str(lookup_csv)
-
+        self,
+        lookup_csv: str = r"D:\Freedom\Pycharm\PycharmProjects\LSTM_DT\input_csv_data\real_project\Preview_progress_fusion.csv",
+    ):
+        self.lookup_csv = lookup_csv
+        self.lookup_data = None
         self.history_file = "progress_history.json"
         self.history = []  # List of {month, total, delta, stage, ...}
 
@@ -1121,12 +1118,12 @@ class ProgressAccuracyEvaluator:
     def __init__(self, real_csv: str = None):
         """
         real_csv:
-            - If None, defaults to LSTM_DT/input_csv data/real_project/Chengbei_24m_work.csv
+            - If None, defaults to LSTM_DT/input_csv_data/real_project/Chengbei_24m_work.csv
             - If you want to use another real-progress file, pass its absolute path explicitly.
         """
         if real_csv is None:
             base = Path(__file__).resolve().parents[3]
-            real_csv = base / "input_csv data" / "real_project" / "Chengbei_24m_work.csv"
+            real_csv = base / "input_csv_data" / "real_project" / "Chengbei_24m_work.csv"
 
         self.real_csv = str(real_csv)
         self.real_data = None
@@ -1249,8 +1246,7 @@ def export_viewer_coloring(month: int, output_path: str, lookup_csv: str = None)
         lookup_csv: Path to Preview_progress_fusion.csv (optional)
     """
     if lookup_csv is None:
-        project_root = Path(__file__).parent
-        lookup_csv = project_root / "data" / "Preview_progress_fusion.csv"
+        lookup_csv = r"D:\Freedom\Pycharm\PycharmProjects\LSTM_DT\input_csv_data\real_project\Preview_progress_fusion.csv"
 
     analyzer = ComponentIncrementalAnalyzer(lookup_csv=lookup_csv)
 

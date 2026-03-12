@@ -95,6 +95,7 @@ def train_single_fold(train_df, val_df,
 
     history = {'train_loss': [], 'val_loss': []}
     best_val_loss = float('inf')
+    best_epoch = 0
     patience_counter, max_patience = 0, 20
 
     print(f"\n{'-'*70}")
@@ -135,6 +136,7 @@ def train_single_fold(train_df, val_df,
         # Early stopping
         if avg_val < best_val_loss:
             best_val_loss = avg_val
+            best_epoch = epoch + 1
             patience_counter = 0
             torch.save(model.state_dict(), CV_MODEL_DIR / f"best_model_fold{fold}_seed{seed}.pt")
         else:
@@ -151,7 +153,7 @@ def train_single_fold(train_df, val_df,
     print(f"\n✓ Fold {fold+1} Seed {seed} training complete")
     print(f"  Best validation loss: {best_val_loss:.6f}")
 
-    return history, best_val_loss
+    return history, best_val_loss, best_epoch
 
 
 def main_cv(n_splits=5, n_seeds=5,
@@ -361,7 +363,7 @@ def main_cv(n_splits=5, n_seeds=5,
             print(f"{'─'*70}")
 
             # Train model
-            history, best_val_loss = train_single_fold(
+            history, best_val_loss, best_epoch = train_single_fold(
                 train_df, val_df,
                 hist_feature_cols=hist_feature_cols,
                 fut_feature_cols=fut_feature_cols,
@@ -392,7 +394,21 @@ def main_cv(n_splits=5, n_seeds=5,
                 'dropout': 0.2,
                 'use_log_transform': use_log_transform,
                 'train_projects': train_projects_fold,
-                'val_projects': val_projects_fold
+                'val_projects': val_projects_fold,
+                # Training procedure metadata (addresses R2 #10/#11)
+                'best_val_loss': float(best_val_loss),
+                'best_epoch': int(best_epoch),
+                'num_epochs_trained': len(history['val_loss']),
+                'max_epochs': num_epochs,
+                'early_stopping_patience': 20,
+                'learning_rate': learning_rate,
+                'batch_size': batch_size,
+                'optimizer': 'Adam',
+                'lr_scheduler': 'ReduceLROnPlateau(factor=0.5, patience=10)',
+                'loss_function': 'MixedLoss(mse_weight=0.7, mae_weight=0.3)' if use_mixed_loss else 'MSELoss',
+                'validation_split': 'GroupKFold project-level (~20% per fold)',
+                'validation_metric': 'val_loss (MixedLoss)',
+                'checkpoint_criterion': 'lowest val_loss'
             }
 
             config_path = CV_MODEL_DIR / f"model_config_fold{fold}_seed{seed_idx}.json"
@@ -405,6 +421,7 @@ def main_cv(n_splits=5, n_seeds=5,
                 'seed': seed_idx,
                 'seed_value': current_seed,
                 'best_val_loss': float(best_val_loss),
+                'best_epoch': int(best_epoch),
                 'final_train_loss': float(history['train_loss'][-1])
             })
 

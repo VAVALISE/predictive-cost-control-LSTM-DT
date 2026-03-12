@@ -689,7 +689,8 @@ def main():
         # Try to find DT hybrid CSV in common locations
         dt_hybrid_paths = [
             Path(args.actual).parent / "Preview_progress_fusion.csv",  # Same dir as actual CSV
-            Path("input_csv data") / "real_project" / "Preview_progress_fusion.csv",
+            Path(r"D:\Freedom\Pycharm\PycharmProjects\LSTM_DT\input_csv_data\real_project\Preview_progress_fusion.csv"),
+            Path("input_csv_data") / "real_project" / "Preview_progress_fusion.csv",
         ]
 
         for dt_path in dt_hybrid_paths:
@@ -754,7 +755,8 @@ def main():
         # Try to find baseline CSV in common locations
         baseline_paths = [
             Path(args.actual).parent / "Chengbei_24m_work.csv",  # Same dir as actual CSV
-            Path("input_csv data") / "real_project" / "Chengbei_24m_work.csv",
+            Path(r"D:\Freedom\Pycharm\PycharmProjects\LSTM_DT\input_csv_data\real_project\Chengbei_24m_work.csv"),
+            Path("input_csv_data") / "real_project" / "Chengbei_24m_work.csv",
         ]
 
         baseline_df = None

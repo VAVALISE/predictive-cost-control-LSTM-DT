@@ -82,12 +82,12 @@ class MixedLoss(nn.Module):
 # Seq2Seq Dataset
 # ===========================
 class Seq2SeqDataset(Dataset):
-"""
-Construct sliding window samples for each project:
-    x_hist: (L, in_hist) Features from the past L months
-    x_fut: (H, in_fut) Covariates for the next H months (known/predictable)
-    y_seq: (H,) Goals for the next H months (here using total_cost, standardized after log1p)
-"""
+    """
+    Construct sliding window samples for each project:
+        x_hist: (L, in_hist) Features from the past L months
+        x_fut: (H, in_fut) Covariates for the next H months (known/predictable)
+        y_seq: (H,) Goals for the next H months (here using total_cost, standardized after log1p)
+    """
     def __init__(self, data, sequence_length=12, prediction_horizon=12,
                  hist_feature_cols=None, fut_feature_cols=None,
                  target_col='total_cost'):

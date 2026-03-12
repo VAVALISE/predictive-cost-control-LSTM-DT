@@ -18,85 +18,125 @@ import json
 # ------------------------------
 def calculate_calibration_metrics(p10, p50, p90, actual):
     """
-    Calculate probabilistic forecast calibration metrics
+    Calculate probabilistic forecast calibration metrics.
+
+    Terminology (addresses reviewer calibration concerns):
+      - exceedance rate: mean(actual <= Pq)  → ideal = q/100
+        (renamed from 'coverage' to avoid confusion with interval coverage)
+      - interval_80_coverage: mean(p10 <= actual <= p90)  → ideal = 80%
+        (the metric reviewers actually expect when they say 'coverage')
+      - interval_score: Gneiting & Raftery (2007) proper scoring rule
+      - pinball_loss: quantile regression loss
 
     Args:
-        p10, p50, p90: Predicted quantiles (arrays)
-        actual: Actual values (array)
+        p10, p50, p90: Predicted quantiles (arrays, percentage points)
+        actual: Actual values (array, percentage points)
 
     Returns:
         dict with calibration metrics
     """
     metrics = {}
 
-    # 1. Coverage / Empirical Coverage
-    metrics['p90_coverage'] = np.mean(actual <= p90) * 100
-    metrics['p50_coverage'] = np.mean(actual <= p50) * 100
-    metrics['p10_coverage'] = np.mean(actual <= p10) * 100
+    # 1. Quantile exceedance rates (renamed from 'coverage' to avoid misreading)
+    #    Ideal: p90_exceedance ≈ 90%, p50_exceedance ≈ 50%, p10_exceedance ≈ 10%
+    metrics['p90_exceedance'] = float(np.mean(actual <= p90) * 100)
+    metrics['p50_exceedance'] = float(np.mean(actual <= p50) * 100)
+    metrics['p10_exceedance'] = float(np.mean(actual <= p10) * 100)
 
-    # 2. Interval Score (Gneiting & Raftery 2007)
-    alpha = 0.2  # For 80% interval (p10-p90)
+    # Keep legacy names for backward compatibility with downstream consumers
+    metrics['p90_coverage'] = metrics['p90_exceedance']
+    metrics['p50_coverage'] = metrics['p50_exceedance']
+    metrics['p10_coverage'] = metrics['p10_exceedance']
+
+    # 2. Interval coverage (central 80% interval: the metric reviewers expect)
+    #    Ideal: ≈ 80%
+    in_interval = (actual >= p10) & (actual <= p90)
+    metrics['interval_80_coverage'] = float(np.mean(in_interval) * 100)
+    metrics['below_p10_rate']        = float(np.mean(actual < p10) * 100)
+    metrics['above_p90_rate']        = float(np.mean(actual > p90) * 100)
+
+    # 3. Interval Score (Gneiting & Raftery 2007) for 80% interval (alpha=0.2)
+    alpha = 0.2
     interval_width = p90 - p10
-    lower_penalty = (2 / alpha) * np.maximum(0, p10 - actual)
-    upper_penalty = (2 / alpha) * np.maximum(0, actual - p90)
+    lower_penalty  = (2 / alpha) * np.maximum(0, p10 - actual)
+    upper_penalty  = (2 / alpha) * np.maximum(0, actual - p90)
     interval_scores = interval_width + lower_penalty + upper_penalty
-    metrics['mean_interval_score'] = np.mean(interval_scores)
-    metrics['interval_width_mean'] = np.mean(interval_width)
+    metrics['mean_interval_score'] = float(np.mean(interval_scores))
+    metrics['interval_width_mean'] = float(np.mean(interval_width))
 
-    # 3. Pinball Loss for P90 (quantile regression loss)
+    # 4. Pinball Loss for P90
     tau = 0.9
     pinball_90 = np.where(actual >= p90,
                           tau * (actual - p90),
                           (1 - tau) * (p90 - actual))
-    metrics['pinball_loss_p90'] = np.mean(pinball_90)
+    metrics['pinball_loss_p90'] = float(np.mean(pinball_90))
 
-    # 4. Pinball Loss for P50 (median)
+    # 5. Pinball Loss for P50 (median)
     tau = 0.5
     pinball_50 = np.where(actual >= p50,
                           tau * (actual - p50),
                           (1 - tau) * (p50 - actual))
-    metrics['pinball_loss_p50'] = np.mean(pinball_50)
+    metrics['pinball_loss_p50'] = float(np.mean(pinball_50))
 
-    # 5. Sharpness (average interval width)
-    metrics['sharpness'] = np.mean(p90 - p10)
+    # 6. Sharpness (average interval width — lower is better given good coverage)
+    metrics['sharpness'] = float(np.mean(p90 - p10))
 
     return metrics
 
 
 def print_calibration_report(metrics):
-    """Print calibration metrics in a formatted report"""
+    """Print calibration metrics in a formatted report."""
     print("\n" + "=" * 70)
     print("PROBABILISTIC FORECAST CALIBRATION METRICS")
     print("=" * 70)
 
-    print("\n1. Coverage (Reliability):")
-    print(f"   P90 Coverage: {metrics['p90_coverage']:.1f}% (ideal: 90%)")
-    print(f"   P50 Coverage: {metrics['p50_coverage']:.1f}% (ideal: 50%)")
-    print(f"   P10 Coverage: {metrics['p10_coverage']:.1f}% (ideal: 10%)")
+    # ── 1. Interval coverage (primary metric for reviewers) ──────────────
+    print("\n1. Interval Coverage (central 80% band: P10 ≤ actual ≤ P90)")
+    ic = metrics.get('interval_80_coverage', float('nan'))
+    below = metrics.get('below_p10_rate', float('nan'))
+    above = metrics.get('above_p90_rate', float('nan'))
+    print(f"   80% Interval Coverage : {ic:.1f}%  (ideal ≈ 80%)")
+    print(f"   Below P10 rate        : {below:.1f}%  (ideal ≈ 10%)")
+    print(f"   Above P90 rate        : {above:.1f}%  (ideal ≈ 10%)")
 
-    # Calibration quality assessment
-    p90_error = abs(metrics['p90_coverage'] - 90)
-    p50_error = abs(metrics['p50_coverage'] - 50)
-
-    if p90_error < 5 and p50_error < 5:
-        cal_quality = "Excellent"
-    elif p90_error < 10 and p50_error < 10:
-        cal_quality = "Good"
-    elif p90_error < 15 and p50_error < 15:
-        cal_quality = "Acceptable"
+    if ic >= 75:
+        ic_qual = "Good (≥75%)"
+    elif ic >= 60:
+        ic_qual = "Acceptable (≥60%)"
     else:
-        cal_quality = "Poor (needs recalibration)"
+        ic_qual = "Poor (<60%) – consider recalibration"
+    print(f"   Coverage Quality      : {ic_qual}")
 
-    print(f"   Calibration Quality: {cal_quality}")
+    # ── 2. Quantile exceedance rates (renamed to avoid misreading) ───────
+    print("\n2. Quantile Exceedance Rates  [mean(actual ≤ Pq), ideal = q%]")
+    print(f"   P90 exceedance: {metrics.get('p90_exceedance', metrics.get('p90_coverage', float('nan'))):.1f}%  (ideal: 90%)")
+    print(f"   P50 exceedance: {metrics.get('p50_exceedance', metrics.get('p50_coverage', float('nan'))):.1f}%  (ideal: 50%)")
+    print(f"   P10 exceedance: {metrics.get('p10_exceedance', metrics.get('p10_coverage', float('nan'))):.1f}%  (ideal: 10%)")
 
-    print("\n2. Sharpness (Precision):")
+    # Calibration quality from exceedance deviation
+    p90_err = abs(metrics.get('p90_exceedance', metrics.get('p90_coverage', 100)) - 90)
+    p50_err = abs(metrics.get('p50_exceedance', metrics.get('p50_coverage', 100)) - 50)
+    if p90_err < 5 and p50_err < 5:
+        exc_qual = "Excellent"
+    elif p90_err < 10 and p50_err < 10:
+        exc_qual = "Good"
+    elif p90_err < 15 and p50_err < 15:
+        exc_qual = "Acceptable"
+    else:
+        exc_qual = "Poor (systematic bias in quantile calibration)"
+    print(f"   Exceedance Quality    : {exc_qual}")
+
+    # ── 3. Sharpness ─────────────────────────────────────────────────────
+    print("\n3. Sharpness (Precision – lower is better given adequate coverage)")
     print(f"   Mean Interval Width (P10-P90): {metrics['interval_width_mean']:.2f} pp")
-    print(f"   Overall Sharpness: {metrics['sharpness']:.2f} pp")
+    print(f"   Overall Sharpness            : {metrics['sharpness']:.2f} pp")
 
-    print("\n3. Interval Score (Lower is better):")
+    # ── 4. Interval Score ─────────────────────────────────────────────────
+    print("\n4. Interval Score – Gneiting & Raftery (2007)  [lower is better]")
     print(f"   Mean Interval Score: {metrics['mean_interval_score']:.2f}")
 
-    print("\n4. Pinball Loss (Lower is better):")
+    # ── 5. Pinball Loss ───────────────────────────────────────────────────
+    print("\n5. Pinball Loss  [lower is better]")
     print(f"   P90 Pinball Loss: {metrics['pinball_loss_p90']:.2f}")
     print(f"   P50 Pinball Loss: {metrics['pinball_loss_p50']:.2f}")
 
@@ -274,13 +314,18 @@ def combine_multiseed(case_dir: Path,
             actual_df['actual'] = actual_df['actual'].astype(float)
 
             # --- IMPORTANT: align month index with Compare_Prediction logic ---
-            # Compare_Prediction shifts pred month back by 1 to match month-end actuals :contentReference[oaicite:7]{index=7}
+            # Compare_Prediction.py applies pred_month + 1 before merging with actual.
+            # This is because Prediction_CS outputs month indices in 0-based style
+            # (pred month 12 = progress at start of month 13 = end of month 12).
+            # Shifting +1 aligns pred to the same month-end actual that Compare uses.
+            # Previous code used -1 here (wrong direction), which caused a 2-month
+            # offset and made all three quantiles appear to cover 100% of actuals.
             out_for_cal = out[['month', 'p10', 'p50', 'p90']].copy()
-            out_for_cal['month_eom'] = out_for_cal['month'].astype(int) - 1
+            out_for_cal['month_aligned'] = out_for_cal['month'].astype(int) + 1
 
             merged = out_for_cal.merge(
                 actual_df,
-                left_on='month_eom',
+                left_on='month_aligned',
                 right_on='month',
                 how='inner',
                 suffixes=('', '_act')

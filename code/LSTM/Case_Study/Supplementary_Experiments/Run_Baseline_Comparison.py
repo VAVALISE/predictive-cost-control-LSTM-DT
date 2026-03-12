@@ -69,7 +69,7 @@ def load_lstm_from_case_study(case_dir: str, anchor: int, horizon: int):
     c_m = pick("month", "m", "time", "t")
     if c_m is not None:
         m = df[c_m].astype(str).str.extract(r"(\d+)")[0].astype(float)
-        mask = m > anchor
+        mask = m >= anchor   # pred month N aligns with actual end-of-month N-1
         sub = df.loc[mask].copy()
     else:
         sub = df.tail(horizon).copy()
@@ -302,13 +302,13 @@ class SensitivityAnalysisExperiment:
 
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
-        self.exp_dir = os.path.join(output_dir, "tolerance_duration")
+        self.exp_dir = os.path.join(output_dir, "governance_parameter_sensitivity")
         os.makedirs(self.exp_dir, exist_ok=True)
 
         self.tolerance_grid = [1, 2, 3, 5]
         self.duration_grid = [1, 2, 3, 4]
 
-        print(f"Experiment 3 output: {self.exp_dir}")
+        print(f"Experiment 3 (Governance Parameter Sensitivity) output: {self.exp_dir}")
 
     def detect_with_params(self, deviation: np.ndarray,
                            tolerance: float, duration: int) -> list:
@@ -368,7 +368,7 @@ class SensitivityAnalysisExperiment:
     def run_grid_analysis(self, deviation: np.ndarray, drift_mask: np.ndarray,
                           onset_month: int) -> pd.DataFrame:
         print("\n" + "=" * 70)
-        print("EXPERIMENT 3: SENSITIVITY ANALYSIS")
+        print("EXPERIMENT 3: GOVERNANCE PARAMETER SENSITIVITY")
         print("=" * 70)
 
         results = []
@@ -645,6 +645,9 @@ def run_experiment2(data_path: str, output_dir: str, case_dir: str = None):
                 case_dir, anchor=len(train), horizon=len(test)
             )
             print(f"Loaded LSTM: len={len(lstm_p50)}, p50 head={lstm_p50[:3]}")
+            if len(lstm_p50) != len(test):
+                print(f"[WARNING] LSTM length ({len(lstm_p50)}) != test length ({len(test)}). "
+                      f"Check month alignment in load_lstm_from_case_study.")
         except Exception as e:
             print(f"LSTM import failed: {e}")
 
@@ -688,21 +691,78 @@ def run_experiment3(forecast: np.ndarray, baseline: np.ndarray,
 
 
 def main():
-    BASE_DIR = Path(__file__).parent
-    OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
-    CASE_DIR = BASE_DIR / "outputs" / "case_study_chengbei_v5_20251215_154436"
-    run_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(
+        description="Run_Baseline_Comparison: Experiment 2 (baseline) + Experiment 3 (governance parameter sensitivity)"
+    )
+    parser.add_argument(
+        '--experiment', choices=['2', '3', 'both'], default='both',
+        help="Which experiment to run (default: both)"
+    )
+    parser.add_argument(
+        '--case_dir', default=None,
+        help="Case study output folder containing pred_progress.csv. "
+             "If omitted, uses latest case_study_* directory automatically."
+    )
+    parser.add_argument(
+        '--output_dir', default=None,
+        help="Root output directory (default: auto-detected PROJECT_ROOT/outputs)"
+    )
+    parser.add_argument(
+        '--data_path', default=None,
+        help="Path to Chengbei_24m_work.csv (default: auto-detected)"
+    )
+    args = parser.parse_args()
+
+    # ── Dynamic PROJECT_ROOT resolution (no hardcoded paths) ──────────────
+    _this = Path(__file__).resolve()
+    PROJECT_ROOT = None
+    for _d in range(1, 7):
+        try:
+            _c = _this.parents[_d]
+        except IndexError:
+            break
+        if (_c / "industry_config.json").exists() and (_c / "ModelGenerator.py").exists():
+            PROJECT_ROOT = _c
+            break
+    if PROJECT_ROOT is None:
+        PROJECT_ROOT = _this.parents[3]   # fallback: Supplementary_Experiments→Case_Study→LSTM→LSTM_DT
+
+    # ── Resolve paths ──────────────────────────────────────────────────────
+    OUTPUT_DIR = args.output_dir if args.output_dir else str(PROJECT_ROOT / "outputs")
+    run_ts  = datetime.now().strftime('%Y%m%d_%H%M%S')
     RUN_DIR = os.path.join(OUTPUT_DIR, f"run_baseline_comparison_{run_ts}")
     os.makedirs(RUN_DIR, exist_ok=True)
-    print(f"✓ Output root: {RUN_DIR}")
-    DATA_PATH = os.path.join(BASE_DIR, "input_csv data", "real_project", "Chengbei_24m_work.csv")
 
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--experiment', choices=['2', '3', 'both'], default='both')
-    parser.add_argument('--case_dir', default=None,
-                        help='Case study output folder containing pre_progress.csv')
-    args = parser.parse_args()
+    DATA_PATH = (args.data_path if args.data_path
+                 else str(PROJECT_ROOT / "input_csv_data" / "real_project" / "Chengbei_24m_work.csv"))
+
+    # ── CASE_DIR: prefer --case_dir arg; fall back to latest case_study_* dir ──
+    CASE_DIR = args.case_dir
+    if not CASE_DIR:
+        outputs_path = Path(OUTPUT_DIR)
+        candidates = sorted(
+            outputs_path.glob("case_study_*"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        )
+        if candidates:
+            CASE_DIR = str(candidates[0])
+            print(f"[INFO] --case_dir not specified; using latest: {CASE_DIR}")
+        else:
+            print("[WARNING] No case_study_* directory found. Experiment 2 LSTM import will be skipped.")
+
+    print(f"\n{'=' * 70}")
+    print("RUN_BASELINE_COMPARISON")
+    print(f"{'=' * 70}")
+    print(f"Project root : {PROJECT_ROOT}")
+    print(f"Case dir     : {CASE_DIR}")
+    print(f"Data path    : {DATA_PATH}")
+    print(f"Output dir   : {RUN_DIR}")
+    print(f"Experiments  : {args.experiment}")
+    print(f"{'=' * 70}")
 
     if args.experiment in ['2', 'both']:
         print("\n" + "=" * 70)
@@ -712,43 +772,49 @@ def main():
             run_experiment2(DATA_PATH, RUN_DIR, case_dir=CASE_DIR)
         else:
             print(f"Data file not found: {DATA_PATH}")
-
+            print("Running with synthetic data as fallback...")
             n = 24
             t = np.arange(1, n + 1)
             data = 100 / (1 + np.exp(-0.3 * (t - 12)))
             data = data / data[-1] * 100 + np.random.normal(0, 2, n)
-
             exp = BaselineComparisonExperiment(RUN_DIR)
             results = exp.run_experiment(data[:12], data[12:], np.linspace(data[0], 100, 12))
             exp.plot_metrics_bar(results)
 
     if args.experiment in ['3', 'both']:
         print("\n" + "=" * 70)
-        print("RUNNING EXPERIMENT 3: SENSITIVITY ANALYSIS")
+        print("RUNNING EXPERIMENT 3: GOVERNANCE PARAMETER SENSITIVITY")
         print("=" * 70)
 
         n = 24
         t = np.arange(1, n + 1)
 
-
+        # ── Synthetic project baseline (S-curve) ──────────────────────────
         baseline = 100 / (1 + np.exp(-0.25 * (t - 12)))
         baseline = baseline / baseline[-1] * 100
         baseline = np.maximum.accumulate(baseline)
 
         rng = np.random.default_rng(7)
 
-        forecast = baseline + rng.normal(0, 0.6, n)
+        # Background noise: σ=0.35 pp, well below the tightest tolerance (±1%)
+        # so noise-triggered false alarms are isolated and interpretable
+        forecast = baseline + rng.normal(0, 0.35, n)
 
-        forecast[5:7] += baseline[5:7] * 0.025
-
-        for i in range(10, n):
-            ramp = (i - 10) / (n - 10)  # 0..1
+        # Deterministic drift ramp: begins at M13 (test-period start),
+        # grows linearly from 0 to +8% of baseline by M24.
+        # onset_month is set explicitly to the ramp start, not derived from
+        # drift_mask, so lead values reflect true detection lag/advance.
+        drift_onset_idx = 12   # 0-indexed → M13
+        for i in range(drift_onset_idx, n):
+            ramp = (i - drift_onset_idx) / (n - drift_onset_idx)
             forecast[i] += baseline[i] * (0.08 * ramp)
 
         dev_pct = (forecast - baseline) / np.maximum(baseline, 1e-6) * 100
 
-        drift_mask = dev_pct > 5.0
-        onset_month = int(np.argmax(drift_mask)) + 1
+        # drift_mask: True for months in the genuine drift period (M13–M24)
+        # Used for false-alarm rate calculation in calculate_metrics()
+        drift_mask = np.arange(1, n + 1) >= (drift_onset_idx + 1)
+        onset_month = drift_onset_idx + 1   # M13 — explicit, not threshold-derived
 
         run_experiment3(forecast, baseline, drift_mask, onset_month, RUN_DIR)
 
