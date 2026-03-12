@@ -1,0 +1,24 @@
+{
+  "CN": {
+    "CPI": {
+    "base_value": 1.003,
+    "avg_growth": 0.000021,
+    "volatility": 0.004
+     },
+  "PPI": {
+    "base_value": 0.993,
+    "avg_growth": -0.00791,
+    "volatility": 0.015
+     },
+  "MPPI": {
+    "base_value": 0.999,
+    "avg_growth": -0.00680,
+    "volatility": 0.020
+     },
+  "Labor": {
+    "base_value": 1.004,
+    "avg_growth": 0.00440,
+    "volatility": 0.00018
+     }
+  }
+}
