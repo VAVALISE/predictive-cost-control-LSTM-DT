@@ -3,9 +3,6 @@ URN Mapping Manager
 ===================
 Manages the mapping between uploaded files and their URNs.
 Saves to JSON file for persistence across sessions.
-
-Author: Enhanced version
-Date: 2024-11-12
 """
 
 import json
